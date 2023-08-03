@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Customer Management</title>
+</head>
+<body>
+    <h1>Customer List</h1>
+    <table id="customerTable" border="1">
+        <tr>
+            <th>First Name</th>
+            <th>Last Name</th>
+            <th>Street</th>
+            <th>Address</th>
+            <th>City</th>
+            <th>State</th>
+            <th>Email</th>
+            <th>Phone</th>
+            <th>Delete</th>
+            <th>Update</th>
+        </tr>
+    </table>
+
+    <h1>Add Customer</h1>
+    <form id="addCustomerForm">
+        <label for="first_name">First Name:</label>
+        <input type="text" id="first_name" name="first_name" required><br><br>
+        <label for="last_name">Last Name:</label>
+        <input type="text" id="last_name" name="last_name" required><br><br>
+        <label for="street">Street:</label>
+        <input type="text" id="street" name="street" required><br><br>
+        <label for="address">Address:</label>
+        <input type="text" id="address" name="address" required><br><br>
+        <label for="city">City:</label>
+        <input type="text" id="city" name="city" required><br><br>
+        <label for="state">State:</label>
+        <input type="text" id="state" name="state" required><br><br>
+        <label for="email">Email:</label>
+        <input type="email" id="email" name="email" required><br><br>
+        <label for="phone">Phone:</label>
+        <input type="text" id="phone" name="phone" required><br><br>
+        <input type="submit" value="Add Customer">
+    </form>
+
+    <script>
+        const baseURL = "https://qa2.sunbasedata.com/sunbase/portal/api";
+        let token = null;
+
+        // Function to authenticate the user and get the bearer token
+        const authenticateUser = async (login_id, password) => {
+            try {
+                const response = await fetch(`${baseURL}/assignment_auth.jsp`, {
+                    method: 'POST',
+                    body: JSON.stringify({ login_id, password }),
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    token = data.token;
+                    await refreshCustomerList();
+                    return true;
+                } else {
+                    console.error("Authentication failed:", data);
+                    return false;
+                }
+            } catch (error) {
+                console.error("Error during authentication:", error);
+                return false;
+            }
+        };
+
+        // Function to get the list of customers
+        const getCustomerList = async () => {
+            try {
+                const response = await fetch(`${baseURL}/assignment.jsp?cmd=get_customer_list`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                if (response.ok) {
+                    const customerList = await response.json();
+                    return customerList;
+                } else {
+                    console.error("Failed to get customer list");
+                    return null;
+                }
+            } catch (error) {
+                console.error("Error fetching customer list:", error);
+                return null;
+            }
+        };
+
+        // Function to create or update a customer
+        const saveCustomer = async (customerData, method, uuid = null) => {
+            try {
+                let url = `${baseURL}/assignment.jsp`;
+                if (method === 'POST') {
+                    url += `?cmd=create`;
+                } else if (method === 'PUT') {
+                    url += `?cmd=update&uuid=${uuid}`;
+                }
+
+                const response = await fetch(url, {
+                    method,
+                    body: JSON.stringify(customerData),
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    await refreshCustomerList();
+                    return true;
+                } else {
+                    console.error("Failed to save customer:", response.status);
+                    return false;
+                }
+            } catch (error) {
+                console.error("Error saving customer:", error);
+                return false;
+            }
+        };
+
+        // Function to delete a customer
+        const deleteCustomer = async (uuid) => {
+            try {
+                const response = await fetch(`${baseURL}/assignment.jsp?cmd=delete&uuid=${uuid}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                if (response.ok) {
+                    await refreshCustomerList();
+                    return true;
+                } else {
+                    console.error("Failed to delete customer:", response.status);
+                    return false;
+                }
+            } catch (error) {
+                console.error("Error deleting customer:", error);
+                return false;
+            }
+        };
+
+        // Function to refresh the customer list
+        const refreshCustomerList = async () => {
+            const customerList = await getCustomerList();
+            if (customerList) {
+                const customerTable = document.getElementById('customerTable');
+                customerTable.innerHTML = `<tr>
+                    <th>First Name</th>
+                    <th>Last Name</th>
+                    <th>Street</th>
+                    <th>Address</th>
+                    <th>City</th>
+                    <th>State</th>
+                    <th>Email</th>
+                    <th>Phone</th>
+                    <th>Delete</th>
+                    <th>Update</th>
+                </tr>`;
+
+                customerList.forEach(customer => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `<td>${customer.first_name}</td>
+                        <td>${customer.last_name}</td>
+                        <td>${customer.street}</td>
+                        <td>${customer.address}</td>
+                        <td>${customer.city}</td>
+                        <td>${customer.state}</td>
+                        <td>${customer.email}</td>
+                        <td>${customer.phone}</td>
+                        <td><button onclick="deleteCustomer('${customer.uuid}')">Delete</button></td>
+                        <td><button onclick="loadCustomerDetails('${customer.uuid}', '${customer.first_name}', '${customer.last_name}', '${customer.street}', '${customer.address}', '${customer.city}', '${customer.state}', '${customer.email}', '${customer.phone}')">Update</button></td>`;
+                    customerTable.appendChild(row);
+                });
+            }
+        };
+
+        // Event listener for login form submission
+        document.getElementById('loginForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const login_id = document.getElementById('login_id').value;
+            const password = document.getElementById('password').value;
+
+            const authenticated = await authenticateUser(login_id, password);
+            if (authenticated) {
+                // Show customer list and add customer form
+                document.getElementById('customerTable').style.display = 'block';
+                document.getElementById('addCustomerForm').style.display = 'block';
+            } else {
+                alert("Authentication failed. Please check your credentials.");
+            }
+        });
+
+        // Event listener for add customer form submission
+        document.getElementById('addCustomerForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const uuid = document.getElementById('uuid').value;
+            const first_name = document.getElementById('first_name').value;
+            const last_name = document.getElementById('last_name').value;
+            const street = document.getElementById('street').value;
+            const address = document.getElementById('address').value;
+            const city = document.getElementById('city').value;
+            const state = document.getElementById('state').value;
+            const email = document.getElementById('email').value;
+            const phone = document.getElementById('phone').value;
+
+            const customerData = {
+                "first_name": first_name,
+                "last_name": last_name,
+                "street": street,
+                "address": address,
+                "city": city,
+                "state": state,
+                "email": email,
+                "phone": phone
+            };
+
+            if (!uuid) {
+                // Save new customer
+                const saved = await saveCustomer(customerData, 'POST');
+                if (saved) {
+                    alert("Customer successfully added.");
+                    document.getElementById('addCustomerForm').reset();
+                } else {
+                    alert("Failed to add customer.");
+                }
+            } else {
+                // Update existing customer
+                const updated = await saveCustomer(customerData, 'PUT', uuid);
+                if (updated) {
+                    alert("Customer successfully updated.");
+                    document.getElementById('addCustomerForm').reset();
+                } else {
+                    alert("Failed to update customer.");
+                }
+            }
+        });
+
+        // Function to load customer details for update
+        const loadCustomerDetails = (uuid, first_name, last_name, street, address, city, state, email, phone) => {
+            document.getElementById('uuid').value = uuid;
+            document.getElementById('first_name').value = first_name;
+            document.getElementById('last_name').value = last_name;
+            document.getElementById('street').value = street;
+            document.getElementById('address').value = address;
+            document.getElementById('city').value = city;
+            document.getElementById('state').value = state;
+            document.getElementById('email').value = email;
+            document.getElementById('phone').value = phone;
+        };
+    </script>
+</body>
+</html>
